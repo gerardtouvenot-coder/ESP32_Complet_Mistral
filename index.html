@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Contrôle ESP32 via MQTT</title>
   <script src="https://cdn.jsdelivr.net/npm/mqtt/dist/mqtt.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -24,6 +25,11 @@
     .disconnected {
       background-color: lightcoral;
     }
+    .chart-container {
+      width: 100%;
+      height: 300px;
+      margin-top: 20px;
+    }
   </style>
 </head>
 <body>
@@ -37,9 +43,9 @@
   <button onclick="sendMessage('#eteindre')">Éteindre</button>
 
   <h2>LED RVB</h2>
-  <p>Rouge: <input type="range" id="redSlider" class="slider" min="0" max="255" oninput="updateRGB()"></p>
-  <p>Vert: <input type="range" id="greenSlider" class="slider" min="0" max="255" oninput="updateRGB()"></p>
-  <p>Bleu: <input type="range" id="blueSlider" class="slider" min="0" max="255" oninput="updateRGB()"></p>
+  <p>Rouge: <input type="range" id="redSlider" class="slider" min="0" max="255" value="0" oninput="updateRGB()"></p>
+  <p>Vert: <input type="range" id="greenSlider" class="slider" min="0" max="255" value="0" oninput="updateRGB()"></p>
+  <p>Bleu: <input type="range" id="blueSlider" class="slider" min="0" max="255" value="0" oninput="updateRGB()"></p>
 
   <h2>Message depuis ESP32</h2>
   <div id="messageFromESP32" style="border: 1px solid black; padding: 10px; min-height: 50px;"></div>
@@ -48,9 +54,60 @@
   <input type="text" id="messageInput" placeholder="Tape ton message ici" maxlength="128">
   <button onclick="sendTextMessage()">Envoyer</button>
 
+  <h2>Graphique des Valeurs RVB</h2>
+  <div class="chart-container">
+    <canvas id="rgbChart"></canvas>
+  </div>
+
   <script>
-    // Connexion MQTT via WebSocket (utilisation de ws:// au lieu de wss://)
+    // Connexion MQTT via WebSocket
     const mqttClient = mqtt.connect('wss://broker.emqx.io:8084/mqtt');
+
+    // Variables pour le graphique
+    const ctx = document.getElementById('rgbChart').getContext('2d');
+    const rgbChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [
+          {
+            label: 'Rouge',
+            data: [],
+            borderColor: 'rgba(255, 99, 132, 1)',
+            backgroundColor: 'rgba(255, 99, 132, 0.2)',
+            borderWidth: 1
+          },
+          {
+            label: 'Vert',
+            data: [],
+            borderColor: 'rgba(75, 192, 192, 1)',
+            backgroundColor: 'rgba(75, 192, 192, 0.2)',
+            borderWidth: 1
+          },
+          {
+            label: 'Bleu',
+            data: [],
+            borderColor: 'rgba(54, 162, 235, 1)',
+            backgroundColor: 'rgba(54, 162, 235, 0.2)',
+            borderWidth: 1
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        scales: {
+          y: {
+            beginAtZero: true,
+            max: 255
+          }
+        }
+      }
+    });
+
+    // Variables pour stocker les valeurs actuelles
+    let currentRedValue = 0;
+    let currentGreenValue = 0;
+    let currentBlueValue = 0;
 
     mqttClient.on('connect', () => {
       console.log("Connecté au broker MQTT depuis le navigateur !");
@@ -95,9 +152,32 @@
       const greenValue = document.getElementById('greenSlider').value;
       const blueValue = document.getElementById('blueSlider').value;
 
+      currentRedValue = redValue;
+      currentGreenValue = greenValue;
+      currentBlueValue = blueValue;
+
       sendMessage('#R' + redValue);
       sendMessage('#V' + greenValue);
       sendMessage('#B' + blueValue);
+
+      // Mise à jour du graphique
+      const now = new Date();
+      const time = now.getHours() + ':' + now.getMinutes() + ':' + now.getSeconds();
+
+      // Limiter le nombre de labels pour éviter la surcharge
+      if (rgbChart.data.labels.length > 10) {
+        rgbChart.data.labels.shift();
+        rgbChart.data.datasets[0].data.shift();
+        rgbChart.data.datasets[1].data.shift();
+        rgbChart.data.datasets[2].data.shift();
+      }
+
+      rgbChart.data.labels.push(time);
+      rgbChart.data.datasets[0].data.push(redValue);
+      rgbChart.data.datasets[1].data.push(greenValue);
+      rgbChart.data.datasets[2].data.push(blueValue);
+
+      rgbChart.update();
     }
   </script>
 </body>
