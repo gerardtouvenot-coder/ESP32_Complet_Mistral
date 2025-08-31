@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Contrôle ESP32 via MQTT</title>
+  <script src="https://cdn.jsdelivr.net/npm/mqtt/dist/mqtt.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+    }
+    .slider {
+      width: 100%;
+    }
+    #mqttStatus {
+      padding: 10px;
+      border-radius: 5px;
+      display: inline-block;
+    }
+    .connected {
+      background-color: lightgreen;
+    }
+    .disconnected {
+      background-color: lightcoral;
+    }
+  </style>
+</head>
+<body>
+  <h1>Contrôle ESP32 via MQTT</h1>
+
+  <h2>Connexion MQTT</h2>
+  <div id="mqttStatus" class="disconnected">Déconnecté</div>
+
+  <h2>LED simple</h2>
+  <button onclick="sendMessage('#allumer')">Allumer</button>
+  <button onclick="sendMessage('#eteindre')">Éteindre</button>
+
+  <h2>LED RVB</h2>
+  <p>Rouge: <input type="range" id="redSlider" class="slider" min="0" max="255" oninput="updateRGB()"></p>
+  <p>Vert: <input type="range" id="greenSlider" class="slider" min="0" max="255" oninput="updateRGB()"></p>
+  <p>Bleu: <input type="range" id="blueSlider" class="slider" min="0" max="255" oninput="updateRGB()"></p>
+
+  <h2>Message depuis ESP32</h2>
+  <div id="messageFromESP32" style="border: 1px solid black; padding: 10px; min-height: 50px;"></div>
+
+  <h2>Envoyer un message à l'ESP32</h2>
+  <input type="text" id="messageInput" placeholder="Tape ton message ici" maxlength="128">
+  <button onclick="sendTextMessage()">Envoyer</button>
+
+  <script>
+    // Connexion MQTT via WebSocket (utilisation de ws:// au lieu de wss://)
+    const mqttClient = mqtt.connect('wss://broker.emqx.io:8084/mqtt');
+
+    mqttClient.on('connect', () => {
+      console.log("Connecté au broker MQTT depuis le navigateur !");
+      document.getElementById('mqttStatus').className = 'connected';
+      document.getElementById('mqttStatus').innerText = 'Connecté';
+      mqttClient.subscribe('esp32/to/html');
+      mqttClient.subscribe('esp32/status');
+    });
+
+    mqttClient.on('error', (error) => {
+      console.error("Erreur de connexion MQTT :", error);
+      document.getElementById('mqttStatus').className = 'disconnected';
+      document.getElementById('mqttStatus').innerText = 'Erreur de connexion';
+    });
+
+    mqttClient.on('message', (topic, message) => {
+      console.log(`Message reçu sur le topic ${topic}: ${message.toString()}`);
+      if (topic === 'esp32/to/html') {
+        document.getElementById('messageFromESP32').innerText = message.toString();
+      } else if (topic === 'esp32/status') {
+        if (message.toString() === 'connecté') {
+          document.getElementById('mqttStatus').className = 'connected';
+          document.getElementById('mqttStatus').innerText = 'Connecté';
+        }
+      }
+    });
+
+    function sendMessage(message) {
+      mqttClient.publish('esp32/from/html', message);
+      console.log(`Message envoyé : ${message}`);
+    }
+
+    function sendTextMessage() {
+      const message = document.getElementById('messageInput').value;
+      mqttClient.publish('esp32/from/html', message);
+      document.getElementById('messageInput').value = '';
+      console.log(`Message texte envoyé : ${message}`);
+    }
+
+    function updateRGB() {
+      const redValue = document.getElementById('redSlider').value;
+      const greenValue = document.getElementById('greenSlider').value;
+      const blueValue = document.getElementById('blueSlider').value;
+
+      sendMessage('#R' + redValue);
+      sendMessage('#V' + greenValue);
+      sendMessage('#B' + blueValue);
+    }
+  </script>
+</body>
+</html>
